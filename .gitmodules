@@ -1,0 +1,4 @@
+[submodule "third-party/DRSOM.jl"]
+	path = third-party/DRSOM.jl
+	url = https://github.com/brentian/DRSOM.jl
+	branch = dev

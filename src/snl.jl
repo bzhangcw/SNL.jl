@@ -140,117 +140,7 @@ function create_neighborhood(n, m, pp, radius, nf, degree)
 
 end
 
-function least_square(n, m, points, pp, Nx::NeighborVector)
-
-    function _least_square(nx::Neighbor)
-        i, j = nx.edge
-        xij = j < n - m + 1 ? points[:, i] - points[:, j] : points[:, i] - pp[:, j]
-        dh = xij .^ 2 |> sum
-        return (dh - nx.distn^2)^2
-    end
-    val = _least_square.(Nx) |> sum
-    return val
-end
-
-function idx(i::Int, dim::Int)
-    return (i-1)*dim+1:i*dim
-end
-
-
-# new interface to snl
-"""
-return true if an edge (i,j) does not connect to anchors
-"""
-function bool_edge_is_x2x(
-    i::Int, j::Int,
-    nx::Neighbor,
-    anchors::Union{Nothing,AbstractVector{Int}}=nothing
-)
-    anchors === nothing ? nx.type == 'x' : ((i ∉ anchors) & (j ∉ anchors))
-end
-
-function loss(
-    x::AbstractVector{T},
-    points::Matrix{T},
-    Nxview::Dict{Tuple{Int,Int},Neighbor},
-    randmethod::Union{Nothing,Function},
-    # edges::Union{Nothing,Iterators{E}}=nothing,
-    edges=nothing,
-    anchors::Union{Nothing,AbstractVector{Int}}=nothing
-) where {T,E}
-    xv = reshape(x, 2, :)
-    (edges === nothing) && (edges = randmethod(Nxview))
-    if edges |> length == 0
-        return -1
-    end
-    function _least_square(edge)
-        nx = Nxview[edge]
-        i, j = nx.edge
-        xij = bool_edge_is_x2x(i, j, nx, anchors) ? xv[:, i] - xv[:, j] : xv[:, i] - points[:, j]
-        dh = xij .^ 2 |> sum
-        return (dh - nx.distn^2)^2
-    end
-
-    return _least_square.(edges) |> sum
-
-end
-
-function g(
-    x::AbstractVector{T},
-    points::Matrix{T},
-    Nxview::Dict{Tuple{Int,Int},Neighbor},
-    randmethod::Union{Nothing,Function},
-    # edges::Union{Nothing,Iterators{E}}=nothing,
-    edges=nothing,
-    anchors::Union{Nothing,AbstractVector{Int}}=nothing
-) where {T,E}
-    xv = reshape(x, 2, :)
-    g = zeros(size(xv))
-    (edges === nothing) && (edges = randmethod(Nxview))
-    for edge in edges
-        i, j = edge
-        nx = Nxview[edge]
-        xij = bool_edge_is_x2x(i, j, nx, anchors) ? xv[:, i] - xv[:, j] : xv[:, i] - points[:, j]
-        dh = xij .^ 2 |> sum
-        ff = dh - nx.distn^2
-        g[:, i] += 4 * ff * xij
-        if bool_edge_is_x2x(i, j, nx, anchors)
-            g[:, j] += -4 * ff * xij
-        end
-    end
-    return reshape(g, size(x))
-end
-
-function H(
-    x::AbstractVector{T},
-    points::Matrix{T},
-    Nxview::Dict{Tuple{Int,Int},Neighbor},
-    randmethod::Union{Nothing,Function},
-    # edges::Union{Nothing,Iterators{E}}=nothing,
-    edges=nothing,
-    anchors::Union{Nothing,AbstractVector{Int}}=nothing
-) where {T,E}
-    xv = reshape(x, 2, :)
-    nflat = length(x)
-    Hblks = spzeros(nflat, nflat)
-    (edges === nothing) && (edges = randmethod(Nxview))
-    for edge in edges
-        i, j = edge
-        nx = Nxview[edge]
-        xij = bool_edge_is_x2x(i, j, nx, anchors) ? xv[:, i] - xv[:, j] : xv[:, i] - points[:, j]
-        dh = xij .^ 2 |> sum
-        M = 2 * xij * xij' + dh * I
-        M1 = 4 * M - 4 * nx.distn^2 * I
-        Hblks[idx(i, 2), idx(i, 2)] += M1
-        if bool_edge_is_x2x(i, j, nx, anchors)
-            Hblks[idx(j, 2), idx(j, 2)] += M1
-            Hblks[idx(i, 2), idx(j, 2)] = -M1
-        end
-    end
-    return Symmetric(Hblks, :U)
-end
-
-
+include("diff.jl")
 
 s = ArgParseSettings(
     description="""
@@ -293,7 +183,6 @@ s = ArgParseSettings(
     "--n"
     arg_type = Int
     default = 80
-    required = true
     help = "total number of sensors (including the anchors)"
     "--m"
     arg_type = Int
@@ -335,8 +224,8 @@ s = ArgParseSettings(
     default = 0.2
 end
 
-function parse_cmd()
-    _args = parse_args(SNL.s, as_symbols=true)
+function parse_cmd(manual_args=nothing)
+    _args = manual_args !== nothing ? parse_args(manual_args, SNL.s, as_symbols=true) : parse_args(SNL.s, as_symbols=true)
     display(_args)
     return _args
 end
@@ -345,8 +234,7 @@ export Neighbor, NeighborVector
 export parse_cmd, least_square
 export idx
 export loss, g, H
-
-
-include("./opt.jl")
+export SDR
+export create_neighborhood, create_snl_data
 
 end # module

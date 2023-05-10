@@ -3,6 +3,8 @@ using DRSOM
 using Optim
 using LineSearches
 using ReverseDiff
+using Printf
+using .SNL
 
 function drsom_nls_legacy(n, m, pp, Nx::NeighborVector, Xv::Matrix{Float64}, tol::Float64, max_iter::Real, verbose::Bool)
     function loss(x::AbstractVector{T}) where {T}
