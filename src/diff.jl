@@ -6,6 +6,7 @@ using LinearAlgebra
 using SparseArrays
 using ArgParse
 using JuMP
+using ForwardDiff
 
 
 function least_square(n, m, points, pp, Nx::NeighborVector)
@@ -39,6 +40,16 @@ function bool_edge_is_x2x(
     anchors === nothing ? nx.type == 'x' : ((i ∉ anchors) & (j ∉ anchors))
 end
 
+@doc raw"""
+computing the forth-order nonlinear least-square loss 
+
+```math
+f(X)=\min _X 
+\sum_{(i<j, j) \in N_x}\left(\left\|x_i-x_j\right\|^2-d_{i j}^2\right)^2
++\sum_{(k, j) \in N_a}\left(\left\|a_k-x_j\right\|^2-\bar{d}_{k j}^2\right)^2,
+```
+
+"""
 function loss(
     x::AbstractVector{T},
     points::Matrix{G},
@@ -93,6 +104,41 @@ function g(
     end
     return reshape(g, size(x))
 end
+
+function hvp!(
+    x::AbstractVector{T},
+    v::AbstractVector{T},
+    w::AbstractVector{T},
+    points::Matrix{G},
+    Nxview::Dict{Tuple{Int,Int},Neighbor},
+    randmethod::Union{Nothing,Function},
+    edges=nothing,
+    anchors::Union{Nothing,AbstractVector{Int}}=nothing;
+    eps=1e-5
+) where {T,G}
+    # ForwardDiff.derivative!(w, t -> g(x + t * v, points, Nxview, randmethod, edges, anchors), 0)
+    gn = g(x + eps .* v, points, Nxview, randmethod, edges, anchors)
+    gf = g(x, points, Nxview, randmethod, edges, anchors)
+    copyto!(w, (gn - gf) / eps)
+end
+
+function hvp(
+    x::AbstractVector{T},
+    v::AbstractVector{T},
+    points::Matrix{G},
+    Nxview::Dict{Tuple{Int,Int},Neighbor},
+    randmethod::Union{Nothing,Function},
+    edges=nothing,
+    anchors::Union{Nothing,AbstractVector{Int}}=nothing;
+    eps=1e-5
+) where {T,G}
+    # ForwardDiff.derivative(t -> g(x + t * v, points, Nxview, randmethod, edges, anchors), 0)
+    gn = g(x + eps .* v, points, Nxview, randmethod, edges, anchors)
+    gf = g(x, points, Nxview, randmethod, edges, anchors)
+    return (gn - gf) / eps
+end
+
+
 
 function H(
     x::AbstractVector{T},

@@ -10,7 +10,7 @@ getresultfield(x, y=:fx) = getfield.(getfield(x, :trajectory), y)
 getname(x) = getfield(x, :name) |> string
 geteps(x) = x.g_norm
 
-Base.@kwdef mutable struct StateOptim
+Base.@kwdef mutable struct StateOptim{R}
     fx::Float64
     ϵ::Float64
     t::Float64
@@ -18,16 +18,18 @@ Base.@kwdef mutable struct StateOptim
     kg::Int = 0
     kH::Int = 0
     kh::Int = 0
+    x::R = nothing
 end
 function optim_to_result(rr, name)
     traj = map(
-        (x) -> StateOptim(fx=x.value, ϵ=x.g_norm, t=rr.time_run), rr.trace
+        (x) -> StateOptim(fx=x.value, ϵ=x.g_norm, t=x.metadata["time"]), rr.trace
     )
     traj[end].kf = rr.f_calls
     traj[end].kg = rr.g_calls
     traj[end].kH = rr.h_calls
     return Result(name=name, iter=rr, state=traj[end], k=rr.iterations, trajectory=traj)
 end
+
 
 
 # deterministic options
@@ -39,13 +41,28 @@ options = Optim.Options(
     show_every=100,
     time_limit=100
 )
+somoptions = Optim.Options(
+    g_tol=1e-7,
+    iterations=10000,
+    store_trace=true,
+    show_trace=true,
+    show_every=5,
+    time_limit=100
+)
 
 ##################################
 # VISUALIZATION TOOLS
 ##################################
+VISCOLOR = Dict()
+VISCOLOR[@sprintf("GD")] = :black
+VISCOLOR[@sprintf("SGD")] = :green
+VISCOLOR[@sprintf("BCD")] = :purple
+VISCOLOR[@sprintf("BCDf")] = :purple2
+VISCOLOR[@sprintf("Adam")] = :pink
+VISCOLOR[@sprintf("SDRSOM")] = :red
 function plot_realization(
-    n, m, pp, Nxd, X, color;
-    seed=1, heval::Bool=true, Ha=Ha, fa=fa, ga=ga
+    n, m, pp, Nxd, r;
+    seed=1, heval::Bool=true, Ha=nothing, fa=nothing, ga=nothing
 )
     plotly()
     fig = scatter(
@@ -76,22 +93,23 @@ function plot_realization(
     end
     plot!(fig, edgesx, edgesy, linestyle=:dashdot, label="edges")
     comments = []
-    for (_, (k, xx)) in enumerate(X)
+    for (_, (k, v)) in enumerate(r)
 
         if heval
+            xx = reshape(v.state.x, :, n - m)
             xf = reshape(xx, length(xx))
             λ₁ = eigmin(Ha(xf) |> Matrix)
             ss = @sprintf("%12s, f:%+.1e, g:%+.1e, λ₁:%+.1e", string(k), fa(xf), ga(xf) |> norm, λ₁)
             push!(comments, ss)
             scatter!(
                 fig, xx[1, :], xx[2, :], markercolor="grey99",
-                markerstrokecolor=[color[k]],
+                markerstrokecolor=[VISCOLOR[k]],
                 fillstyle=nothing, markershape=:circle, label=ss
             )
         else
             scatter!(
                 fig, xx[1, :], xx[2, :], markercolor="grey99",
-                markerstrokecolor=[color[k]],
+                markerstrokecolor=[VISCOLOR[k]],
                 fillstyle=nothing, markershape=:circle, label=@sprintf("%s", string(k))
             )
         end
@@ -103,48 +121,54 @@ function plot_realization(
 end
 
 
-function plot_function_value(n, m, r; smoothing=false, smoothing_range=5, pre::Symbol=:ppt)
+function plot_function_value(
+    n, m, r;
+    smoothing=false, smoothing_range=5, pre::Symbol=:ppt, metric=:fx
+)
     getresultfield(x, y=:fx) = getfield.(getfield(x, :trajectory), y)
     smoother(x) = movingaverage(x, smoothing_range)
-    if smoothing
-        method_objval_ragged = rstack(
-            r["SGD"][end] |> smoother,
-            r["Adam"][end] |> smoother,
-            getresultfield(r["SDRSOM"], :fx) |> smoother;
-            fill=NaN
+
+    for xaxis in (:t, :k)
+
+        @printf("plotting results\n")
+
+        pgfplotsx()
+        title = L"SNL, $n:=$%$(n), $m:=$%$(m)"
+        fig = plot(
+            xlabel=(xaxis == :t ? L"\textrm{Running Time (s)}" : L"\textrm{Iterations}"),
+            ylabel=metric == :ϵ ? L"\|\nabla f\|" : L"f(x)",
+            title=title,
+            size=(600, 500),
+            yticks=[1e-12, 1e-10, 1e-8, 1e-6, 1e-4, 1e-2, 1e-1, 1e0, 1e1],
+            # xticks=[1, 10, 100, 200, 500, 1000, 10000, 100000, 1e6],
+            yscale=:log10,
+            # xscale=:log2,
+            dpi=500,
+            labelfontsize=14,
+            xtickfont=font(13),
+            ytickfont=font(13),
+            # leg=:bottomleft,
+            legendfontsize=14,
+            legendfontfamily="sans-serif",
+            titlefontsize=22,
+            # palette=:Paired_8
         )
-    else
-        method_objval_ragged = rstack(
-            r["SGD"][end],
-            r["Adam"][end],
-            getresultfield(r["SDRSOM"], :fx)
-            ; fill=NaN
-        )
+        for (_, (k, rv)) in enumerate(r)
+            yv = smoothing ? getresultfield(rv, metric) |> smoother : getresultfield(rv, metric)
+
+            plot!(fig,
+                xaxis == :t ? getresultfield(rv, :t) : (1:(yv|>length)),
+                yv,
+                label=k,
+                linewidth=1.1,
+                markershape=:circle,
+                markersize=1.5,
+                markercolor=:match,
+                # linestyle=linestyles[k]
+                # seriescolor=colors[k]
+            )
+        end
+        savefig(fig, "/tmp/SNL-$n-$m-$xaxis.pdf")
+
     end
-    method_names = ["SGD"; "ADAM"; "SDRSOM"]
-
-    @printf("plotting results\n")
-    title = "SNL model"
-    fig = plot(
-        1:(method_objval_ragged|>size|>first),
-        method_objval_ragged,
-        label=permutedims(method_names),
-        xscale=:log10,
-        yscale=:log10,
-        xlabel=L"$k$: iteration",
-        ylabel=L"$\mathbb E f(x; \xi)$",
-        title=title,
-        size=pre == :ppt ? (1080, 720) : (1100, 500),
-        yticks=[1e-10, 1e-6, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2],
-        xticks=[1, 10, 100, 200, 500, 1000, 2000, 5000, 10000, 5e4, 1e5, 5e5, 1e6],
-        dpi=500,
-        xtickfont=font(13),
-        ytickfont=font(13),
-        legendfontsize=14,
-        legendfontfamily="sans-serif",
-        titlefontsize=16,
-    )
-
-    savefig(fig, @sprintf("/tmp/SNL-%s-%s.pdf", n, m))
-
 end

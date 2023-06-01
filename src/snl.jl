@@ -92,6 +92,14 @@ function create_snl_data(param::Dict)
     snldata["nf"] = param[:nf]
     snldata["deg"] = param[:degree]
     matwrite(@sprintf("/tmp/test%d-%d.mat", param[:m], param[:n]), snldata)
+    @info """
+        generating sensor-network localization instance with 
+        - m (anchors)                          := $(snldata["m"])
+        - n (sensors [inc. anchors])           := $(snldata["n"])
+        - r (radius)                           := $(snldata["r"])
+        - nf (noise factor)                    := $(snldata["nf"])
+        - deg (maximum degree for each node)   := $(snldata["deg"])
+    """
     return snldata
 end
 
@@ -233,7 +241,7 @@ end
 export Neighbor, NeighborVector
 export parse_cmd, least_square
 export idx
-export loss, g, H
+export loss, g, H, hvp, hvp!
 export SDR
 export create_neighborhood, create_snl_data
 
