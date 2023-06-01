@@ -7,6 +7,7 @@ using SparseArrays
 using ArgParse
 using JuMP
 using ForwardDiff
+using ADNLPModels
 
 
 function least_square(n, m, points, pp, Nx::NeighborVector)
@@ -105,6 +106,35 @@ function g(
     return reshape(g, size(x))
 end
 
+function g!(
+    x::AbstractVector{T},
+    g::AbstractVector{T},
+    points::Matrix{G},
+    Nxview::Dict{Tuple{Int,Int},Neighbor},
+    randmethod::Union{Nothing,Function},
+    edges=nothing,
+    anchors::Union{Nothing,AbstractVector{Int}}=nothing
+) where {T,G}
+    xv = reshape(x, 2, :)
+    (edges === nothing) && (edges = randmethod(Nxview))
+    counts = edges |> length
+    if counts == 0
+        return zeros(size(x))
+    end
+    for edge in edges
+        i, j = edge
+        nx = Nxview[edge]
+        xij = bool_edge_is_x2x(i, j, nx, anchors) ? xv[:, i] - xv[:, j] : xv[:, i] - points[:, j]
+        dh = xij .^ 2 |> sum
+        ff = dh - nx.distn^2
+        g[:, i] += 4 * ff * xij
+        if bool_edge_is_x2x(i, j, nx, anchors)
+            g[:, j] += -4 * ff * xij
+        end
+    end
+    return reshape(g, size(x))
+end
+
 function hvp!(
     x::AbstractVector{T},
     v::AbstractVector{T},
@@ -171,3 +201,20 @@ function H(
     end
     return Symmetric(Hblks, :U)
 end
+
+
+
+###################################################
+# SUPPORT NLPModels.jl API
+###################################################
+struct NewADGradient <: ADNLPModels.ADBackend end
+function NewADGradient(
+    nvar::Integer,
+    f,
+    ncon::Integer=0,
+    c::Function=(args...) -> [];
+    kwargs...
+)
+    return NewADGradient()
+end
+

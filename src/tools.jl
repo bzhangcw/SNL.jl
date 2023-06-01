@@ -56,10 +56,13 @@ somoptions = Optim.Options(
 VISCOLOR = Dict()
 VISCOLOR[@sprintf("GD")] = :black
 VISCOLOR[@sprintf("SGD")] = :green
-VISCOLOR[@sprintf("BCD")] = :purple
+VISCOLOR[@sprintf("BCD")] = :purple1
 VISCOLOR[@sprintf("BCDf")] = :purple2
-VISCOLOR[@sprintf("Adam")] = :pink
-VISCOLOR[@sprintf("SDRSOM")] = :red
+VISCOLOR[@sprintf("Adam")] = :pink1
+VISCOLOR[@sprintf("SDRSOM")] = :red1
+VISCOLOR[@sprintf("DRSOM")] = :red2
+VISCOLOR[@sprintf("HSODM")] = :royalblue1
+VISCOLOR[@sprintf("Newton-TR")] = :aquamarine
 function plot_realization(
     n, m, pp, Nxd, r;
     seed=1, heval::Bool=true, Ha=nothing, fa=nothing, ga=nothing
@@ -95,8 +98,8 @@ function plot_realization(
     comments = []
     for (_, (k, v)) in enumerate(r)
 
+        xx = reshape(v.state.x, :, n - m)
         if heval
-            xx = reshape(v.state.x, :, n - m)
             xf = reshape(xx, length(xx))
             λ₁ = eigmin(Ha(xf) |> Matrix)
             ss = @sprintf("%12s, f:%+.1e, g:%+.1e, λ₁:%+.1e", string(k), fa(xf), ga(xf) |> norm, λ₁)
@@ -165,10 +168,11 @@ function plot_function_value(
                 markersize=1.5,
                 markercolor=:match,
                 # linestyle=linestyles[k]
-                # seriescolor=colors[k]
+                seriescolor=VISCOLOR[k]
             )
         end
         savefig(fig, "/tmp/SNL-$n-$m-$xaxis.pdf")
+        savefig(fig, "/tmp/SNL-$n-$m-$xaxis.png")
 
     end
 end

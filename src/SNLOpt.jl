@@ -12,6 +12,7 @@ include("./tools.jl")
 include("./opt.jl")
 include("./optstoc.jl")
 include("./sampling.jl")
+include("./nlp.jl")
 
 
 loss = SNL.loss
