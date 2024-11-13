@@ -16,9 +16,9 @@ using ADNLPModels
 using SNLOpt
 
 bool_generate = true
-bool_parse = false
-bool_opt = false
-bool_plot = false
+bool_parse = true
+bool_opt = true
+bool_plot = true
 
 if bool_generate
     if bool_parse
@@ -98,15 +98,13 @@ if bool_opt
     #     maxiter=10000, freq=10,
     #     maxtime=10000
     # )
-
-    r[@sprintf("HSODM")] = HSODM(name=Symbol("HSODM"))(;
-        x0=copy(x0), f=fd, g=gd, hvp=hvp,
-        maxiter=10000, freq=1,
-        maxtime=10000, tol=1e-8,
-        direction=:warm, linesearch=:hagerzhang,
-        adaptive=:none
-    )
-
+    # r[@sprintf("HSODM")] = HSODM(name=Symbol("HSODM"))(;
+    #     x0=copy(x0), f=fd, g=gd, hvp=hvp,
+    #     maxiter=10000, freq=1,
+    #     maxtime=10000, tol=1e-8,
+    #     direction=:warm, linesearch=:hagerzhang,
+    #     adaptive=:none
+    # )
     # r[@sprintf("Newton-CG-LS")] = PFH(name=Symbol("Newton"))(;
     #     x0=copy(x0), f=fd, g=gd, hvp=hvp,
     #     maxiter=10000, freq=1,
@@ -119,8 +117,7 @@ if bool_opt
     # Do not plot DRSOM
     ##############################################################
 
-    # r[@sprintf("DRSOM")] = rdrsom
-    DRSOM2(name=Symbol("DRSOM"))(;
+    r[@sprintf("DRSOM")] = DRSOM2(name=Symbol("DRSOM"))(;
         x0=copy(x0), f=fd, g=gd,
         maxiter=10000, freq=10,
         maxtime=10000

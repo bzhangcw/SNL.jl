@@ -22,7 +22,7 @@ Base.@kwdef mutable struct StateOptim{R}
 end
 function optim_to_result(rr, name)
     traj = map(
-        (x) -> StateOptim(fx=x.value, ϵ=x.g_norm, t=x.metadata["time"]), rr.trace
+        (x) -> StateOptim(x=rr.minimizer, fx=x.value, ϵ=x.g_norm, t=x.metadata["time"]), rr.trace
     )
     traj[end].kf = rr.f_calls
     traj[end].kg = rr.g_calls
@@ -65,7 +65,9 @@ VISCOLOR[@sprintf("HSODM")] = :royalblue1
 VISCOLOR[@sprintf("Newton-TR")] = :aquamarine
 function plot_realization(
     n, m, pp, Nxd, r;
-    seed=1, heval::Bool=true, Ha=nothing, fa=nothing, ga=nothing
+    seed=1, heval::Bool=true,
+    Ha=nothing, fa=nothing, ga=nothing,
+    slidesanchor=n-m+1:n,
 )
     plotly()
     fig = scatter(
@@ -77,10 +79,14 @@ function plot_realization(
         label="Truth",
         legendfontsize=24,
         tickfontsize=16,
-        size=(1080, 960),
+        size=(1280, 960),
+        legend=:outerbottomright,
+        extra_plot_kwargs=Dict(
+            :include_mathjax => "cdn",
+        ),
     )
 
-    scatter!(fig, pp[1, n-m+1:n], pp[2, n-m+1:n], markershape=:utriangle, markersize=4, markerstrokewidth=0.1, label="Anchors")
+    scatter!(fig, pp[1, slidesanchor], pp[2, slidesanchor], markershape=:utriangle, markersize=4, markerstrokewidth=0.1, label="Anchors")
     edgesx = []
     edgesy = []
     for (idx, nx) in enumerate(Nxd[1:end-1])
@@ -97,7 +103,8 @@ function plot_realization(
     plot!(fig, edgesx, edgesy, linestyle=:dashdot, label="edges")
     comments = []
     for (_, (k, v)) in enumerate(r)
-
+        isnothing(v.state) && continue
+        @info "" v.state
         xx = reshape(v.state.x, :, n - m)
         if heval
             xf = reshape(xx, length(xx))

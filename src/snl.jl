@@ -145,7 +145,22 @@ function create_neighborhood(n, m, pp, radius, nf, degree)
         end
         return Nx
     end
+end
 
+function create_neighborhood(n, m, pp, nf, sete)
+    Nx = NeighborVector()
+    for (tp, (i, j)) in sete
+        i, j = sort([i, j]) # ensure i < j
+        rr = norm(pp[:, i] - pp[:, j])
+        distn = rr * sqrt(max(0, (1 + randn() * nf)))
+        try
+            nxv = tp == 'x' ? [0; 0; ei(i, n - m) - ei(j, n - m)] : [-pp[:, j]; ei(i, n - m)]
+            push!(Nx, Neighbor(edge=(i, j), type=tp, vec=nxv, dist=rr, distn=distn))
+        catch e
+            @error "i=$i, j=$j, tp=$tp, rr=$rr, distn=$distn"
+        end
+    end
+    return Nx
 end
 
 include("diff.jl")

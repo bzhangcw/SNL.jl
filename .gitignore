@@ -1,3 +1,4 @@
+archive
 # extras
 # doc
 *.xdv
@@ -32,7 +33,7 @@ build-rc/
 references/
 src/thirdparty/
 !src/thirdparty/CMakeLists.txt
-
+Manifest.toml
 # mathematical programming
 *.lp
 *.mps
